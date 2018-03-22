@@ -1,18 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Mar  7 12:22:31 2018
-
-@author: max.unsted
-"""
-
 import pandas as pd
 import numpy as np
 import itertools
 
 df = pd.read_csv("~/data/cleaned_2016_df.csv")
-
 cat = 'sex'
+cat = 'ethnicity'
 df['cat'] = df[cat]
 
 sic_mappings = pd.read_csv("~/projects/employment/sic_mappings.csv")
@@ -29,7 +21,7 @@ y = pd.Series(["civil_society", "total_uk", "overlap"])
 x = x.append(y)
 agg = expand_grid(
    {'sector': x,
-   'sex': np.unique(df.sex)}
+   cat: np.unique(df['cat'])}
 )
 
 for i in range(1,5):
@@ -146,52 +138,175 @@ aggfinal.loc[aggfinal['count'] < 6000, 'count'] = 0
 # format values
 aggfinal['count'] = round(aggfinal['count'] / 1000, 0).astype(int)
 
+
+# sex
+if cat == 'sex':
+    perc = True
+    cattotal = True
+    catorder = ['Male', 'Female']
+    emptypecats = True
+    wsname = "3.5 - Gender (000's)"
+    startrow = 9
+    finishrow = 17
+    finishcol = 16
+
+# ethnicity
+if cat == 'ethnicity':
+    perc = True
+    cattotal = True
+    catorder = ['White', 'BAME']
+    emptypecats = False
+    wsname = "3.6 - Ethnicity (000's)"
+    startrow = 8
+    finishrow = 16
+    finishcol = 6
+
+if emptypecats == False:
+    aggfinal = aggfinal[aggfinal['emptype'] == 'total']
+
+"""
+if (catvar == "dcms_ageband") aggfinal <- aggfinal[aggfinal$cat != "0-15 years", ]
+if (catvar == "ethnicity") aggfinal <- aggfinal[aggfinal$emptype == "total" & aggfinal$cat != 0, ]
+if (catvar == "qualification") aggfinal <- aggfinal[aggfinal$emptype == "total", ]
+if (catvar == "ftpt") aggfinal <- aggfinal[aggfinal$emptype == "total", ]
+"""
+
 # summary table
 if 'final' in globals():
     del final
 
-perc = True
-cattotal = True
-catorder = ['Male', 'Female']
-
 for emptype in aggfinal['emptype'].unique():
     
     aggfinaltemp = aggfinal[aggfinal['emptype'] == emptype]
-    emptable = aggfinaltemp[['sector', 'count', 'sex']].set_index(['sex', 'sector']).sort_index().unstack('sex')
-    emptable.columns = emptable.columns.droplevel(0)
+    aggfinaltemp.rename(columns={'count': emptype}, inplace=True)
+    emptable = aggfinaltemp[['sector', emptype, cat]].set_index([cat, 'sector']).sort_index().unstack(cat)
+    #emptable.columns = emptable.columns.droplevel(0)
     total = emptable.sum(axis=1)
     total.name = 'Total'
-    emptable = emptable[catorder]
-    
+
+    emptable = emptable.reindex(level=1, columns=catorder)
+        
     empnames = []
     if perc:
-        for mycol in emptable.columns:
-            emptable[mycol + '_perc'] = emptable[mycol] / total * 100
+        for mycol in emptable.columns.levels[1]:
+            emptable.loc[:, (emptype, mycol + '_perc')] = emptable[emptype][mycol] / total * 100
             empnames.append(mycol)
             empnames.append(mycol + '_perc')
-        emptable = emptable[empnames]
+        emptable = emptable.reindex(level=1, columns=empnames)
     
     # emptype total
     if cattotal:
-        emptable = pd.concat([emptable, total], axis=1)
+        emptable.loc[:, (emptype, 'Total')] = total
+        #emptable = pd.concat([emptable, total], axis=1)
     
     if 'final' in globals():
         final = pd.concat([final, emptable], axis=1)
     else:
         final = emptable.copy()
 
+# replace NaNs with 0
+final = final.fillna(0)
+        
 # reorder rows
 myroworder = ["civil_society", "creative", "culture", "digital", "gambling", "sport", "telecoms", "all_dcms", "total_uk"]
 final = final.reindex(myroworder)
 
-final.to_csv('test.csv')
+data = final.copy()
+
+# generate data
+final.columns
+cat1 = data.columns.levels[0].values.tolist()
+#cat2 = ['Male', 'Male_perc', 'Female', 'Female_perc', 'Total']
+cat2 = data.columns.levels[1].values.tolist()
+
+
+# if emp is zero, set semp to 0 and vice versa
+if emptypecats == True:
+    for row in data.index:
+        for emptype in cat1[:-1]:
+            for sex in cat2:
+                if data[emptype][sex][row] == 0:
+                    otheremptype = cat1[:-1]
+                    otheremptype.remove(emptype)
+                    data.loc[row, (otheremptype[0], sex)] = 0
+
+data
+
+# make sure there is not only 1 zero in non total cat levels
+for row in data.index:
+    for emptype in cat1:
+        for sex in cat2[:-1]:
+            if sum(data.loc[row, emptype].isin([0])) == 1:
+                if data.loc[row, (emptype, cat2[0])] == 0:
+                    data.loc[row, (emptype, cat2[1])] = 0
+                else:
+                    data.loc[row, (emptype, cat2[0])] = 0
+
+
+data.dtypes
+
+
+
+# store anonymised values as 0s for comparison and data types
+
+# check data against publication --------------------------------------------
+
+# read in publication data
+from openpyxl import load_workbook, Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+
+wb = load_workbook('DCMS_Sectors_Economic_Estimates_Employment_2016_tables.xlsx')
+ws = wb[wsname]
+
+
+exceldata = ws.values
+exceldata = list(exceldata)
+newdata = []
+for row in range(startrow - 1, finishrow):
+    listrow = list(exceldata[row][1:finishcol])
+    listrow = [0 if x == '-' else x for x in listrow]
+    newdata.append(listrow)
+
+exceldataframe = pd.DataFrame(newdata, index=data.index, columns=data.columns)
+exceldataframe.dtypes
+
+# compare computed and publication data
+difference = data - exceldataframe
+if sum((difference > 1).any()) != 0:
+    print('datasets dont match')
+    
+def test_datamatches():
+    assert sum((difference > 1).any()) == 0
+
+
+
+# write data to excel template
+wb = load_workbook('DCMS_Sectors_Economic_Estimates_Employment_2016_tables_Template_unmerged.xlsx')
+
+"""
+wb.sheetnames
+ws = wb['Contents']
+mycell = ws['B8'].value
+ws.cell(row=1, column=1, value=10) #assigns value of 10 to cell
+ws['A1'].value
+"""
+
+ws = wb[wsname]
+rows = dataframe_to_rows(data, index=False, header=False)
+
+for r_idx, row in enumerate(rows, 1):
+    for c_idx, value in enumerate(row, 1):
+         ws.cell(row=r_idx + startrow - 1, column=c_idx + 1, value=value)
+
+wb.save('dcms-testing2.xlsx')
 
 # get final table with hierarchical indexes which I can check against those read in from excel (including order of rows etc), but then just output the values to the formatted excel templates
 
 # for anonymisation, it seems something quite simple will work initially. Only gender, age, and nnsec seem like they will require rules
 
+# for region the total won't = the sum anyway, so don't need to do annonymisation
 
-
+# use openpyxl initially and move on to xlwings if necessary. xlsxwriter cannot read workbooks but should be considered if producing workbooks from scratch.
 
 
 
