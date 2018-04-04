@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import itertools
 
-def anonymise(data, emptypecats):
+def anonymise(data, emptypecats, anoncats):
     # anonymisation
     cat1 = data.columns.levels[0].values.tolist()
     #cat2 = ['Male', 'Male_perc', 'Female', 'Female_perc', 'Total']
@@ -23,10 +23,22 @@ def anonymise(data, emptypecats):
     for row in data.index:
         for emptype in cat1:
             for sex in cat2[:-1]:
-                if sum(data.loc[row, emptype].isin([0])) == 1:
-                    if data.loc[row, (emptype, cat2[0])] == 0:
-                        data.loc[row, (emptype, cat2[1])] = 0
-                    else:
-                        data.loc[row, (emptype, cat2[0])] = 0
+                if anoncats == []:
+                    if sum(data.loc[row, emptype].isin([0])) == 1:
+                        if data.loc[row, (emptype, cat2[0])] == 0:
+                            data.loc[row, (emptype, cat2[1])] = 0
+                        else:
+                            data.loc[row, (emptype, cat2[0])] = 0
+                else:
+                    if sum(data.loc[row, emptype].isin([0])) == 1:
+                        if data.loc[row, (emptype, anoncats[0])] == 0:
+                            data.loc[row, (emptype, anoncats[1])] = 0
+                        elif data.loc[row, (emptype, anoncats[1])] == 0:
+                            data.loc[row, (emptype, anoncats[0])] = 0
+                        else:
+                            data.loc[row, (emptype, anoncats[0])] = 0
+
+
+
     
     return data

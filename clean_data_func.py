@@ -119,9 +119,9 @@ def clean_data(cat, df, sic_mappings):
     aggfinal = aggfinal[aggfinal['sector'] != 'tourism'] # this is redundant
     # check for any missing values
     if aggfinal.isnull().values.any() == True:
-        print('missing values')
+        print(cat + ': missing values')
     else:
-        print('no missing values')
+        print(cat + ': no missing values')
     
     # anonymise individual elements - messes up cat totals if done here
     #aggfinal.loc[aggfinal['count'] < 6000, 'count'] = 0

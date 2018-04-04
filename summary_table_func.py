@@ -55,9 +55,6 @@ def summary_table(aggfinal, cat, perc, cattotal, catorder):
         mask = emptable.loc[:, (slice(None), colsforrounding)] < 6000
         emptable[mask] = 0
         
-        if cat == 'sex' and emptype == 'self employed':
-            pdb.set_trace()
-        
         # anonymise percs if corresponding counts are 0
         if perc:
             catorderperc = [i + '_perc' for i in catorder]

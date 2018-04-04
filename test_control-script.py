@@ -6,7 +6,10 @@ import pdb
 
 """
 NOTES
-dcms..._2016_tables_2.xlsx adds some missing anonymisations
+dcms..._2016_tables_2.xlsx is the workbook we are checking against and adds some fixes: 
+    adds some missing anonymisations
+    rounds qualification and ftpt (rounded .5 down in some cases) numbers to 0dp
+
 however, this approach does not make sense to add in over-anonymisation, instead temporarily remove these cases from my data. make a list below:
     sex
         employed
@@ -15,11 +18,29 @@ however, this approach does not make sense to add in over-anonymisation, instead
                 
 
 we are currently annonymising overlap row before it is used for all_dcms which needs fixing
+
+want to keep all cat specific adjustments in this main script, not in functions
 """
 
 
 
+
 df = pd.read_csv("~/data/cleaned_2016_df.csv")
+
+# finish cleaning data post R cleaning
+df['qualification'] = df['qualification'].astype(str)
+df['ftpt'] = df['ftpt'].astype(str)
+df['nssec'] = df['nssec'].astype(str)
+
+regionlookupdata = pd.read_csv('~/projects/employment/region-lookup.csv')
+regionlookdict = {}
+for index, row in regionlookupdata.iterrows():
+    regionlookdict.update({row[0] : row[1]})
+
+df['regionmain'] = df.GORWKR.map(regionlookdict)
+df['regionsecond'] = df.GORWK2R.map(regionlookdict)
+
+
 
 sic_mappings = pd.read_csv("~/projects/employment/sic_mappings.csv")
 sic_mappings = sic_mappings[sic_mappings.sic != 62.011]
@@ -34,7 +55,7 @@ def make_cat_data(cat):
     
     # CLEANING DATA
     import clean_data_func
-    aggfinal = clean_data_func.clean_data(cat, df, sic_mappings)
+    aggfinal = clean_data_func.clean_data(cat, dfcopy, sic_mappings)
     
     if emptypecats == False:
         aggfinal = aggfinal[aggfinal['emptype'] == 'total']
@@ -53,7 +74,7 @@ def make_cat_data(cat):
     #pdb.set_trace()
     # ANONYMISING DATA
     import anonymise_func
-    data = anonymise_func.anonymise(final, emptypecats)
+    data = anonymise_func.anonymise(final, emptypecats, anoncats)
     
     # add extra anonymisation to match publication
     if cat == 'sex':
@@ -67,10 +88,11 @@ def make_cat_data(cat):
     from openpyxl.utils.dataframe import dataframe_to_rows
     exceldataframe = check_data_func.check_data(data, wsname, startrow, finishrow, finishcol)
     # compare computed and publication data
+    
     difference = data - exceldataframe
     
     if sum((difference > 1).any()) != 0:
-        print('datasets dont match')
+        print(cat + ': datasets dont match')
     
     return [difference, data]
 
@@ -93,7 +115,9 @@ if (catvar == "nssec") df <- df[df[, catvar] %in% catorder, ]
 """
 
 differencelist = {}
-for mycat in ['sex', 'ethnicity', 'dcms_ageband']:
+for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nssec']:
+    
+    anoncats = []
     
     # sex
     if mycat == 'sex':
@@ -127,6 +151,43 @@ for mycat in ['sex', 'ethnicity', 'dcms_ageband']:
         startrow = 8
         finishrow = 16
         finishcol = 16
+
+    if mycat == 'qualification':
+        perc = False
+        cattotal = True
+        catorder = ["Degree or equivalent",	"Higher Education",	"A Level or equivalent", "GCSE A* - C or equivalent",	"Other",	"No Qualification"]
+        emptypecats = False
+        wsname = "3.8 - Qualification (000's)"
+        startrow = 7
+        finishrow = 15
+        finishcol = 8
+        anoncats = ['Other', 'No Qualification']
+        
+    if mycat == 'ftpt':
+        perc = True
+        cattotal = True
+        catorder = ['Full time', 'Part time']
+        emptypecats = False
+        wsname = "3.9 - Fulltime Parttime (000's)"
+        startrow = 8
+        finishrow = 16
+        finishcol = 6
+    
+    if mycat == 'nssec':
+        perc = False
+        cattotal = False
+        catorder = ["More Advantaged Group (NS-SEC 1-4)", "Less Advantaged Group (NS-SEC 5-8)"]
+        emptypecats = True
+        wsname = "3.10 - NS-SEC (000's)"
+        startrow = 8
+        finishrow = 16
+        finishcol = 7
+    
+    dfcopy = df.copy()
+    if mycat == 'qualification':
+        dfcopy = dfcopy[dfcopy.qualification != 'dont know']
+        dfcopy = dfcopy[dfcopy.qualification != 'nan']
+    
     
     mylist = make_cat_data(mycat)
     data = mylist[1]
@@ -151,13 +212,16 @@ finishcol = 16
 # marks=pytest.mark.xfail
 import pytest
 @pytest.mark.parametrize('test_input,expected', [
-    pytest.param('ethnicity', 0, marks=pytest.mark.basic),
     pytest.param('sex', 0, marks=pytest.mark.basic),
-    pytest.param('dcms_ageband', 0, marks=pytest.mark.xfail)
+    pytest.param('ethnicity', 0, marks=pytest.mark.basic),
+    pytest.param('dcms_ageband', 0, marks=pytest.mark.basic),
+    pytest.param('qualification', 0, marks=pytest.mark.xfail), # publication numbers dont add up - go through with penny
+    pytest.param('ftpt', 0, marks=pytest.mark.basic),
+    pytest.param('nssec', 0, marks=pytest.mark.basic),
 ])
 def test_datamatches(test_input, expected):
-    assert sum((differencelist[test_input] < -1).any()) == expected
-    assert sum((differencelist[test_input] > 1).any()) == expected
+    assert sum((differencelist[test_input] < -0.05).any()) == expected
+    assert sum((differencelist[test_input] > 0.05).any()) == expected
 
 
 wb.save('dcms-testing2.xlsx')
