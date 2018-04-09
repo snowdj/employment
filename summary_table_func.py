@@ -7,12 +7,17 @@ import pdb
 #aggfinal['count'] = round(aggfinal['count'] / 1000, 0).astype(int)
 
 # summary table
-def summary_table(aggfinal, cat, perc, cattotal, catorder):
+def summary_table(aggfinal, cat, perc, cattotal, catorder, region):
     
     for emptype in aggfinal['emptype'].unique():
         
+        
+        
         aggfinaltemp = aggfinal[aggfinal['emptype'] == emptype]
         aggfinaltemp.rename(columns={'count': emptype}, inplace=True)
+        #import ipdb; ipdb.set_trace()
+        
+        # create two way table
         emptable = aggfinaltemp[['sector', emptype, cat]].set_index([cat, 'sector']).sort_index().unstack(cat)
         #emptable.columns = emptable.columns.droplevel(0)
         total = emptable.sum(axis=1)

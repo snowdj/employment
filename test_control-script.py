@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import itertools
 import pytest
-import pdb
+import ipdb
 
 """
 NOTES
@@ -27,7 +27,9 @@ want to keep all cat specific adjustments in this main script, not in functions
 
 df = pd.read_csv("~/data/cleaned_2016_df.csv")
 
-# finish cleaning data post R cleaning
+
+# finish cleaning data post R cleaning ========================================
+
 df['qualification'] = df['qualification'].astype(str)
 df['ftpt'] = df['ftpt'].astype(str)
 df['nssec'] = df['nssec'].astype(str)
@@ -50,15 +52,25 @@ sic_mappings.sic = sic_mappings.sic.astype(int)
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 
-# BATCH TOGETHER DATA FUNCTIONS
+
+# BATCH TOGETHER DATA FUNCTIONS ===============================================
+
 def make_cat_data(cat):
     
-    # CLEANING DATA
+    # CLEANING DATA - adding up main and second jobs, calculating some totals, columns for sector, cat, region, count
+    # there doesn't appear to be any tables which use both region and a demographic category, so simply remove region or replace cat column with it.
     import clean_data_func
-    aggfinal = clean_data_func.clean_data(cat, dfcopy, sic_mappings)
+    aggfinal = clean_data_func.clean_data(cat, dfcopy, sic_mappings, regionlookupdata, region)
     
+    #import ipdb; ipdb.set_trace()
+    
+    #if mycat != 'region':
+    #    aggfinal = aggfinal.groupby(['sector', cat, 'emptype'])['count'].sum().reset_index()
+        #pdb.set_trace()
+        
     if emptypecats == False:
         aggfinal = aggfinal[aggfinal['emptype'] == 'total']
+                
     
     """
     if (catvar == "dcms_ageband") aggfinal <- aggfinal[aggfinal$cat != "0-15 years", ]
@@ -68,13 +80,18 @@ def make_cat_data(cat):
     """
     
     # SUMMARISING DATA
-    import summary_table_func
-    final = summary_table_func.summary_table(aggfinal, cat, perc, cattotal, catorder)
+    if cat == 'region':
+        import region_summary_table_func
+        final = region_summary_table_func.region_summary_table(aggfinal, cat, perc, cattotal, catorder, region)
+    else:
+        import summary_table_func
+        final = summary_table_func.summary_table(aggfinal, cat, perc, cattotal, catorder, region)
+    
     
     #pdb.set_trace()
     # ANONYMISING DATA
     import anonymise_func
-    data = anonymise_func.anonymise(final, emptypecats, anoncats)
+    data = anonymise_func.anonymise(final, emptypecats, anoncats, cat)
     
     # add extra anonymisation to match publication
     if cat == 'sex':
@@ -94,10 +111,12 @@ def make_cat_data(cat):
     if sum((difference > 1).any()) != 0:
         print(cat + ': datasets dont match')
     
+    #pdb.set_trace()
     return [difference, data]
 
 
-# write data to excel template
+# write data to excel template ================================================
+    
 wb = load_workbook('DCMS_Sectors_Economic_Estimates_Employment_2016_tables_Template_unmerged.xlsx')
 
 """
@@ -115,7 +134,7 @@ if (catvar == "nssec") df <- df[df[, catvar] %in% catorder, ]
 """
 
 differencelist = {}
-for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nssec']:
+for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nssec', 'region']:
     
     anoncats = []
     
@@ -129,6 +148,7 @@ for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         startrow = 9
         finishrow = 17
         finishcol = 16
+        region = False
     
     # ethnicity
     if mycat == 'ethnicity':
@@ -140,7 +160,8 @@ for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         startrow = 8
         finishrow = 16
         finishcol = 6
-
+        region = False
+        
         # ethnicity
     if mycat == 'dcms_ageband':
         perc = False
@@ -151,7 +172,8 @@ for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         startrow = 8
         finishrow = 16
         finishcol = 16
-
+        region = False
+        
     if mycat == 'qualification':
         perc = False
         cattotal = True
@@ -162,7 +184,8 @@ for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         finishrow = 15
         finishcol = 8
         anoncats = ['Other', 'No Qualification']
-        
+        region = False
+                
     if mycat == 'ftpt':
         perc = True
         cattotal = True
@@ -172,7 +195,8 @@ for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         startrow = 8
         finishrow = 16
         finishcol = 6
-    
+        region = False
+        
     if mycat == 'nssec':
         perc = False
         cattotal = False
@@ -182,7 +206,20 @@ for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         startrow = 8
         finishrow = 16
         finishcol = 7
-    
+        region = False
+        
+    if mycat == 'region':
+        perc = True
+        cattotal = False
+        catorder = ["More Advantaged Group (NS-SEC 1-4)", "Less Advantaged Group (NS-SEC 5-8)"]
+        emptypecats = True
+        wsname = "3.3 - Region (000's)"
+        startrow = 8
+        finishrow = 21
+        finishcol = 6
+        region = True
+        #import ipdb; ipdb.set_trace()
+        
     dfcopy = df.copy()
     if mycat == 'qualification':
         dfcopy = dfcopy[dfcopy.qualification != 'dont know']
@@ -191,7 +228,7 @@ for mycat in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
     
     mylist = make_cat_data(mycat)
     data = mylist[1]
-    difference = mylist[0]
+    difference = mylist[0]    
     differencelist.update({mycat : difference})
     
     ws = wb[wsname]
@@ -215,7 +252,7 @@ import pytest
     pytest.param('sex', 0, marks=pytest.mark.basic),
     pytest.param('ethnicity', 0, marks=pytest.mark.basic),
     pytest.param('dcms_ageband', 0, marks=pytest.mark.basic),
-    pytest.param('qualification', 0, marks=pytest.mark.xfail), # publication numbers dont add up - go through with penny
+    pytest.param('qualification', 0, marks=pytest.mark.xfail), # publication numbers dont add up - go through with penny - turn's out there is an extra column which is hidden by the publication called don't know which explains all this
     pytest.param('ftpt', 0, marks=pytest.mark.basic),
     pytest.param('nssec', 0, marks=pytest.mark.basic),
 ])
