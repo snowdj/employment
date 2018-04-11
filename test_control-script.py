@@ -255,6 +255,7 @@ import pytest
     pytest.param('qualification', 0, marks=pytest.mark.xfail), # publication numbers dont add up - go through with penny - turn's out there is an extra column which is hidden by the publication called don't know which explains all this
     pytest.param('ftpt', 0, marks=pytest.mark.basic),
     pytest.param('nssec', 0, marks=pytest.mark.basic),
+    pytest.param('region', 0, marks=pytest.mark.basic),
 ])
 def test_datamatches(test_input, expected):
     assert sum((differencelist[test_input] < -0.05).any()) == expected
