@@ -11,7 +11,9 @@ import ipdb
 
 # however, we need to join the 4 subsets together so that the main and second jobs counts can be added up. 
 
-# currently we create some base columns (agg) to merge into so that each subset is aligned and can be added. We aggregate the subset by these columns, then left join into the data... maybe it is best to not bother with the base columns and just outer join everything - and do the aggregating in the next stage???
+# currently we create some base columns (agg) to merge into so that each subset is aligned and can be added. We aggregate the subset by these columns, then left join into the data... 
+
+# maybe it is best to not bother with the base columns and just outer join everything - and do the aggregating in the next stage - would need to make sure that sic, sector, region (not region, just cat, one of which is region!) do not have any missing values - for now include sic, sector and region in agg then try reducing after the for loop???
 
 
 
@@ -47,6 +49,7 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
         else:
             agg = expand_grid(
                {'sector': x,
+                #'sic': np.unique(sic_mappings.sic),
                cat: np.unique(df[cat])
                }
             )
@@ -132,21 +135,30 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
         # create column with unique name (which is why pd.DataFrame() syntax is used) which sums the count by sector
         aggtemp = pd.DataFrame({subset : dftemp.groupby( ['sector', cat, 'sic'])['count'].sum()}).reset_index()
         
-        if sic_level == False:
-            aggtemp = pd.DataFrame({subset : aggtemp.groupby( ['sector', cat])[subset].sum()}).reset_index()
-            if region == False:
-                aggtemp = aggtemp.groupby(['sector', cat])[subset].sum().reset_index()
+        #if sic_level == False:
+        #    aggtemp = pd.DataFrame({subset : aggtemp.groupby( ['sector', cat])[subset].sum()}).reset_index()
+            #if region == False:
+            #    aggtemp = aggtemp.groupby(['sector', cat])[subset].sum().reset_index()
 
-        else:
-            aggtemp = pd.DataFrame({subset : aggtemp.groupby( ['sic', cat])[subset].sum()}).reset_index()
+        #else:
+        #    aggtemp = pd.DataFrame({subset : aggtemp.groupby( ['sic', cat])[subset].sum()}).reset_index()
         
         # EXPECTING BELOW LINE TO HAVE SAME EFFECT AS REMOVING REGION FROM ABOVE AGGTEMP, BUT IT DOES NOT - THIS IS THE DEISCREPANCY THAT NEEDS INVESTIGATING.
                         
-        # merge final stacked subset into empty dataset containing each sector and category level combo 
-        agg = pd.merge(agg, aggtemp, how='left')
+        # merge final stacked subset into empty dataset containing each sector and category level combo
+        agg = pd.merge(agg, aggtemp, how='outer')
     
-    # sum main and second jobs counts together
+    # fill in missing values to avoid problems with NaN
     agg = agg.fillna(0)
+    
+    # reduce down to desired aggregate
+    agg = agg.drop('sic', axis=1)
+    agg = agg.groupby(['sector', cat]).sum()
+    agg = agg.reset_index(['sector', cat])
+    
+
+
+    # sum main and second jobs counts together
     agg['emp'] = agg['mainemp'] + agg['secondemp']
     del agg['mainemp']
     del agg['secondemp']
