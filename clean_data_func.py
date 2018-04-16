@@ -3,14 +3,23 @@ import numpy as np
 import itertools
 import ipdb
 
+# we start with df which has a single row for each person which contains their main and second jobs, so main and second sic, and main and second emptype (INECAC05 and SECJMBR) and a weighted count
+
+# we need to sum together the main and second jobs. so we subset for mainemp, secondemp, mainsemp, secondsemp.
+
 
 
 def expand_grid(data_dict):
    rows = itertools.product(*data_dict.values())
    return pd.DataFrame.from_records(rows, columns=data_dict.keys())
 
-def clean_data(cat, df, sic_mappings, regionlookupdata, region):
+def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
     #region = False
+    
+    if sic_level == True:
+        level = 'sic'
+    else:
+        level = 'sector'
     
     x = pd.Series(np.unique(sic_mappings.sector))
     y = pd.Series(["civil_society", "total_uk", "overlap"])
@@ -23,35 +32,42 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region):
            }
         )
     else:
-        agg = expand_grid(
-           {'sector': x,
-           cat: np.unique(df[cat])
-           }
-        )
+        if sic_level == True:
+            agg = expand_grid(
+               {'sic': np.unique(sic_mappings.sic),
+               cat: np.unique(df[cat])
+               }
+            )
+        else:
+            agg = expand_grid(
+               {'sector': x,
+               cat: np.unique(df[cat])
+               }
+            )
 
-    for i in range(1,5):
-        if i == 1:
+    for subset in ['mainemp', 'secondemp', 'mainselfemp', 'secondselfemp']:
+        if subset == 'mainemp':
             sicvar = "INDC07M"
             emptype = "INECAC05"
             emptypeflag = 1
             countname = "mainemp"
             regioncol = 'regionmain'
     
-        if i == 2:
+        if subset == 'secondemp':
             sicvar = "INDC07S"
             emptype = "SECJMBR"
             emptypeflag = 1
             countname = "secondemp"
             regioncol = 'regionsecond'
     
-        if i == 3:
+        if subset == 'mainselfemp':
             sicvar = "INDC07M"
             emptype = "INECAC05"
             emptypeflag = 2
             countname = "mainselfemp"
             regioncol = 'regionmain'
     
-        if i == 4:
+        if subset == 'secondselfemp':
             sicvar = "INDC07S"
             emptype = "SECJMBR"
             emptypeflag = 2
@@ -101,18 +117,25 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region):
         # groupby ignores NaN so giving NaNs a value
         dftemp['region'] = dftemp['region'].fillna('missing region')
         
-        # create column with unique name which sums the count by sector
-        aggtemp = pd.DataFrame({countname :
-        dftemp.groupby( ['sector', cat]
-                  )['count'].sum()}).reset_index()
+        # this converts sic back to numeric
+        dftemp = dftemp.infer_objects()
+        
+        # only total_uk sector has nan sics so groupby is dropping data - setting missing values to 'missing'
+        dftemp['sic'] = dftemp['sic'].fillna(value=-1)
+        
+        # create column with unique name (which is why pd.DataFrame() syntax is used) which sums the count by sector
+        aggtemp = pd.DataFrame({subset : dftemp.groupby( ['sector', cat, 'sic'])['count'].sum()}).reset_index()
+        
+        if sic_level == False:
+            aggtemp = pd.DataFrame({subset : aggtemp.groupby( ['sector', cat])[subset].sum()}).reset_index()
+            if region == False:
+                aggtemp = aggtemp.groupby(['sector', cat])[subset].sum().reset_index()
+
+        else:
+            aggtemp = pd.DataFrame({subset : aggtemp.groupby( ['sic', cat])[subset].sum()}).reset_index()
         
         # EXPECTING BELOW LINE TO HAVE SAME EFFECT AS REMOVING REGION FROM ABOVE AGGTEMP, BUT IT DOES NOT - THIS IS THE DEISCREPANCY THAT NEEDS INVESTIGATING.
-        
-        #ipdb.set_trace()
-        if region == False:
-            aggtemp = aggtemp.groupby(['sector', cat])[countname].sum().reset_index()
-        #import ipdb; ipdb.set_trace()
-        
+                        
         # merge final stacked subset into empty dataset containing each sector and category level combo 
         agg = pd.merge(agg, aggtemp, how='left')
     
@@ -128,11 +151,11 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region):
     #import ipdb; ipdb.set_trace()
     
     # stack for emp, selfemp, total
-    aggemp = agg[['sector', cat, 'emp']]        
+    aggemp = agg[[level, cat, 'emp']]        
     aggemp = aggemp.rename(columns={'emp': 'count'})
     aggemp['emptype'] = 'employed'
     
-    aggself = agg[['sector', cat, 'selfemp']]
+    aggself = agg[[level, cat, 'selfemp']]
     aggself = aggself.rename(columns={'selfemp': 'count'})
     aggself['emptype'] = 'self employed'
     
@@ -144,22 +167,24 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region):
     aggfinal = aggfinal.append(aggtotal)
     
     # add civil society and remove overlap from all_dcms
-    aggfinaloverlap = aggfinal.copy()
-    aggfinaloverlap = aggfinaloverlap.reset_index(drop=True)
-    
-    alldcmsindex = aggfinaloverlap[aggfinaloverlap['sector'] == 'all_dcms'].index
-    csindex = aggfinaloverlap[aggfinaloverlap['sector'] == 'civil_society'].index
-    overlapindex = aggfinaloverlap[aggfinaloverlap['sector'] == 'overlap'].index
-    newalldcms = aggfinaloverlap.loc[alldcmsindex, ['count']].reset_index(drop=True) + aggfinaloverlap.loc[csindex, ['count']].reset_index(drop=True) - aggfinaloverlap.loc[overlapindex, ['count']].reset_index(drop=True)
-    newalldcms2 = newalldcms['count']
-    newalldcms3 = np.array(newalldcms2)
-    aggfinaloverlap.loc[alldcmsindex, ['count']] = newalldcms3
-    
-    aggfinal = aggfinaloverlap.copy()
-    
-    # drop tourism
-    aggfinal = aggfinal[aggfinal['sector'] != 'tourism'] # this is redundant
-    # check for any missing values
+    if level == 'sector':
+        aggfinaloverlap = aggfinal.copy()
+        aggfinaloverlap = aggfinaloverlap.reset_index(drop=True)
+        
+        alldcmsindex = aggfinaloverlap[aggfinaloverlap['sector'] == 'all_dcms'].index
+        csindex = aggfinaloverlap[aggfinaloverlap['sector'] == 'civil_society'].index
+        overlapindex = aggfinaloverlap[aggfinaloverlap['sector'] == 'overlap'].index
+        newalldcms = aggfinaloverlap.loc[alldcmsindex, ['count']].reset_index(drop=True) + aggfinaloverlap.loc[csindex, ['count']].reset_index(drop=True) - aggfinaloverlap.loc[overlapindex, ['count']].reset_index(drop=True)
+        newalldcms2 = newalldcms['count']
+        newalldcms3 = np.array(newalldcms2)
+        aggfinaloverlap.loc[alldcmsindex, ['count']] = newalldcms3
+        
+        aggfinal = aggfinaloverlap.copy()
+        
+        # drop tourism
+        aggfinal = aggfinal[aggfinal['sector'] != 'tourism'] # this is redundant
+        # check for any missing values
+
     if aggfinal.isnull().values.any() == True:
         print(cat + ': missing values')
     else:
