@@ -7,6 +7,12 @@ import ipdb
 
 # we need to sum together the main and second jobs. so we subset for mainemp, secondemp, mainsemp, secondsemp.
 
+# for each subset, we add a sector column and create some new levels - each sector subet (including all dcms), totaluk (which is entire original subset), civil society, overlap. so we are left with a nice big data set with every combination of sic, sector, and region. 
+
+# however, we need to join the 4 subsets together so that the main and second jobs counts can be added up. 
+
+# currently we create some base columns (agg) to merge into so that each subset is aligned and can be added. We aggregate the subset by these columns, then left join into the data... maybe it is best to not bother with the base columns and just outer join everything - and do the aggregating in the next stage???
+
 
 
 def expand_grid(data_dict):
@@ -50,41 +56,40 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
             sicvar = "INDC07M"
             emptype = "INECAC05"
             emptypeflag = 1
-            countname = "mainemp"
             regioncol = 'regionmain'
     
         if subset == 'secondemp':
             sicvar = "INDC07S"
             emptype = "SECJMBR"
             emptypeflag = 1
-            countname = "secondemp"
             regioncol = 'regionsecond'
     
         if subset == 'mainselfemp':
             sicvar = "INDC07M"
             emptype = "INECAC05"
             emptypeflag = 2
-            countname = "mainselfemp"
             regioncol = 'regionmain'
     
         if subset == 'secondselfemp':
             sicvar = "INDC07S"
             emptype = "SECJMBR"
             emptypeflag = 2
-            countname = "secondselfemp"
             regioncol = 'regionsecond'
         
-        # base subset for each of 4 groups
+        # create subset for each of 4 groups
         dftemp = df.copy()
         dftemp = dftemp[dftemp[emptype] == emptypeflag]
+        # need separate sic column to allow merging - I think
         dftemp['sic'] = dftemp[sicvar]
         dftemp['count'] = dftemp['PWTA16']
         
+        # total uk includes missing sics, so take copy before removing missing sics
         dftemp_totaluk = dftemp.copy()
         
+        # remove rows from subset with missing sic
         dftemp = dftemp[np.isnan(dftemp.sic) == False]
         
-        # subset for sectors excluding all_dcms
+        # add sector column and further subset to all sectors excluding all_dcms
         dftemp_sectors = pd.merge(dftemp, sic_mappings.loc[:,['sic', 'sector']], how = 'inner')
         dftemp_sectors = dftemp_sectors[dftemp_sectors['sector'] != 'all_dcms']
         
@@ -105,6 +110,7 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
         
         # subset uk total
         dftemp_totaluk['sector'] = 'total_uk'
+        # reorder columns
         dftemp_totaluk = dftemp_totaluk[dftemp_sectors.columns.values]
         
         # append different subsets together
