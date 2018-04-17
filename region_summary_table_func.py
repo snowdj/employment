@@ -37,17 +37,21 @@ def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region):
     myroworder = ['North East', 'North West', 'Yorkshire and the Humber', 'East Midlands', 'West Midlands', 'East of England', 'London', 'South East', 'South West', 'Wales', 'Scotland', 'Northern Ireland', 'All regions']
     final = final.reindex(myroworder)
 
-    # add all uk row
+    # add all uk row ==========================================================
+    # 'All UK' is the sum of sum of sector='totaluk' excluding region='Outside UK'
+    # in the publication, these numbers are the same across different tables which I have already matched - so should be able to recreate
+    
+    # create emp, semp, total columns
     totaluk = aggfinal.copy()
     totaluk = totaluk.set_index(['sector', 'region', 'emptype'])
     totaluk = totaluk.unstack()
     
     # remove outside uk
-    sumlevels = totaluk.index.levels[1].values.tolist()
-    sumlevels.remove('Outside UK')
+    #sumlevels = totaluk.index.levels[1].values.tolist()
+    #sumlevels.remove('Outside UK')
 
     # drop hierarchical index and column names
-    subdf = totaluk.loc[('total_uk', sumlevels), ]
+    subdf = totaluk.loc[('total_uk', slice(None)), ]
     subdf = subdf.reset_index(level='sector', drop=True)
     subdf.columns = subdf.columns.droplevel(0)
 

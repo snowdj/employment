@@ -7,11 +7,11 @@ import ipdb
 
 # we need to sum together the main and second jobs. so we subset for mainemp, secondemp, mainsemp, secondsemp.
 
-# for each subset, we add a sector column and create some new levels - each sector subet (including all dcms), totaluk (which is entire original subset), civil society, overlap. so we are left with a nice big data set with every combination of sic, sector, and region. 
+# for each subset, we add a sector column and create some new levels - each sector subet (including all dcms), totaluk (which is entire original subset), civil society, overlap. so we are left with a nice big data set with every combination of sic, sector, and cat (e.g. region). 
 
 # however, we need to join the 4 subsets together so that the main and second jobs counts can be added up. 
 
-# currently we create some base columns (agg) to merge into so that each subset is aligned and can be added. We aggregate the subset by these columns, then left join into the data... 
+# currently we create sector and cat base columns (agg) to outer join into (thereby adding sics) so that each subset is aligned and can be added. We 
 
 # maybe it is best to not bother with the base columns and just outer join everything - and do the aggregating in the next stage - would need to make sure that sic, sector, region (not region, just cat, one of which is region!) do not have any missing values - for now include sic, sector and region in agg then try reducing after the for loop???
 
@@ -146,6 +146,7 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
         # EXPECTING BELOW LINE TO HAVE SAME EFFECT AS REMOVING REGION FROM ABOVE AGGTEMP, BUT IT DOES NOT - THIS IS THE DEISCREPANCY THAT NEEDS INVESTIGATING.
                         
         # merge final stacked subset into empty dataset containing each sector and category level combo
+        # should be able to just use aggtemp for first agg where subset=='mainemp', but gave error, need to have play around. checking that agg has all the correct sectors and cat levels should be a separate piece of code.
         agg = pd.merge(agg, aggtemp, how='outer')
     
     # fill in missing values to avoid problems with NaN
