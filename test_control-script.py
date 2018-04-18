@@ -62,7 +62,46 @@ def make_cat_data(cat):
     sic_level = False
     
     import clean_data_func
-    aggfinal = clean_data_func.clean_data(cat, dfcopy, sic_mappings, regionlookupdata, region, sic_level)
+    agg = clean_data_func.clean_data(cat, dfcopy, sic_mappings, regionlookupdata, region, sic_level)
+    
+    spsslist = """
+    1820, 2611, 2612, 2620, 2630, 2640, 2680, 3012, 3212, 3220, 3230, 4651, 4652, 4763, 4764, 4910, 4932, 4939, 5010, 5030, 5110, 5510, 5520, 5530, 5590, 5610, 5621, 5629, 5630, 5811, 5812, 5813, 5814, 
+    5819, 5821, 5829, 5911, 5912, 5913, 5914, 5920, 6010, 6020, 6110, 6120, 6130, 6190, 6201, 6202, 6203, 6209, 6311, 6312, 6391, 6399, 6820, 7021, 7111, 7311, 7312, 7410, 7420, 7430, 7711, 7721, 
+    7722, 7729, 7734, 7735, 7740, 7911, 7912, 7990, 8230, 8551, 8552, 9001, 9002, 9003, 9004, 9101, 9102, 9103, 9104, 9200, 9311, 9312, 9313, 9319, 9321, 9329, 9511, 9512 """
+    spsslist = spsslist.replace('\n', '')
+    spsslist = spsslist.replace('\t', '')
+    spsslist = spsslist.replace(' ', '')
+    mylist = np.array(spsslist.split(","))
+    
+    if cat == 'region':
+        aggcheck = agg.fillna(0)
+        # reduce down to desired aggregate
+        aggcheck = aggcheck.drop('sector', axis=1)
+        aggcheck = aggcheck.groupby(['sic', cat]).sum()
+        aggcheck = aggcheck.reset_index(['sic', cat])
+        #aggcheck = aggcheck[aggcheck['sic'] != -1]
+        aggcheck = aggcheck[aggcheck['region'] != 'missing region']
+        aggcheck = aggcheck[aggcheck['sic'].isin(mylist)]
+        
+        
+        # load workbook
+        spsswb = pd.ExcelFile('2016_regions_4digit.xls')
+        # print(spsswb.sheet_names)
+        spssdf = spsswb.parse('2016_regions_4digit')
+        spssdf['sic'] = spssdf['SIC'].str[0:2] + spssdf['SIC'].str[3:5]
+        spssdf.sic = spssdf.sic.astype('float64')
+        spssdf = spssdf[['sic', 'Region', 'M_E_DCMS', 'M_SE_DCMS', 'S_E_DCMS', 'S_SE_DCMS']]
+        spssdf.columns = aggcheck.columns
+        
+        aggcheck = aggcheck.set_index(['sic', 'region'])
+        spssdf = spssdf.set_index(['sic', 'region'])
+        
+        spsswm = spssdf.xs('North West',level=1,axis=0)
+        acwm = aggcheck.xs('North West',level=1,axis=0)
+        wmdiff = spsswm - acwm
+    
+    import aggregate_data_func
+    aggfinal = aggregate_data_func.aggregate_data(cat, agg, sic_mappings, regionlookupdata, region, sic_level)
     
     #import clean_data_func_new
     #aggfinal_new = clean_data_func_new.clean_data_new(cat, dfcopy, sic_mappings, regionlookupdata, region)

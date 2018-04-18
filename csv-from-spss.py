@@ -61,3 +61,49 @@ regionnames = {1 : "North East",
 data.mapno = pd.to_numeric(data.mapno)
 data.mapno = data.mapno.map(regionnames)
 data.to_csv('~/projects/employment/region-lookup.csv', index=False)
+
+spsslist = """
+1820, 2611, 2612, 2620, 2630, 2640, 2680, 3012, 3212, 3220, 3230, 4651, 4652, 4763, 4764, 4910, 4932, 4939, 5010, 5030, 5110, 5510, 5520, 5530, 5590, 5610, 5621, 5629, 5630, 5811, 5812, 5813, 5814, 
+5819, 5821, 5829, 5911, 5912, 5913, 5914, 5920, 6010, 6020, 6110, 6120, 6130, 6190, 6201, 6202, 6203, 6209, 6311, 6312, 6391, 6399, 6820, 7021, 7111, 7311, 7312, 7410, 7420, 7430, 7711, 7721, 
+7722, 7729, 7734, 7735, 7740, 7911, 7912, 7990, 8230, 8551, 8552, 9001, 9002, 9003, 9004, 9101, 9102, 9103, 9104, 9200, 9311, 9312, 9313, 9319, 9321, 9329, 9511, 9512 """
+spsslist = spsslist.replace('\n', '')
+spsslist = spsslist.replace('\t', '')
+spsslist = spsslist.replace(' ', '')
+mylist = np.array(spsslist.split(","))
+mylist.size # 93
+len(spsslist.split(",")) # 93
+
+
+mytext = """
+North East
+North West
+Yorkshire and the Humber
+East Midlands
+West Midlands
+East of England
+London
+South East
+South West
+Wales
+Scotland
+Northern Ireland
+All regions4
+All UK"""
+
+mylist = mytext.split('\n')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
