@@ -123,7 +123,7 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
         dftemp = dftemp.append(dftemp_all_dcms_overlap)
         dftemp['region'] = dftemp[regioncol]
         
-        # groupby ignores NaN so giving NaNs a value
+        # groupby ignores NaN so giving region NaNs a value
         dftemp['region'] = dftemp['region'].fillna('missing region')
         
         # this converts sic back to numeric

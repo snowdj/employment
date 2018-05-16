@@ -7,14 +7,18 @@ import pdb
 #aggfinal['count'] = round(aggfinal['count'] / 1000, 0).astype(int)
 
 # summary table
-def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region):
-
+def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region, sector):
+    
+    if pd.isnull(sector):
+        breakdown = 'all_dcms'
+    else:
+        breakdown = sector
     # create two way table for regions
     for emptype in ['employed', 'self employed', 'total']:
         
         # subset data
         aggfinaltemp = aggfinal[aggfinal['emptype'] == emptype]
-        aggfinaltemp = aggfinaltemp[aggfinaltemp['sector'] == 'all_dcms']
+        aggfinaltemp = aggfinaltemp[aggfinaltemp['sector'] == breakdown]
         aggfinaltemp.rename(columns={'count': emptype}, inplace=True)
 
         # create two way table
@@ -26,7 +30,7 @@ def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region):
             final = pd.concat([final, emptable], axis=1)
         except:
             final = emptable
-
+            
         # we don't want to anonymise overlap !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # need to calculate percs before anonymising!!!! because anonymising 1 cat level will change the calculated perc of non anonymised cat levels. which means we have to anonymise the percs also.
 
@@ -62,10 +66,29 @@ def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region):
         # add perc columns
         if perc:
             final.loc[:, (emptype + '_perc')] = final[emptype] / final['total'] * 100
+    
+    final['perc_of_all_regions'] = final['total'] / final.loc['All regions', 'total'] * 100
+    
+    if pd.isnull(sector):
+        totaldenominator = aggfinal.set_index(['sector', 'region', 'emptype'])
+        totaldenominator = totaldenominator.loc[('total_uk', slice(None), 'total')]
+        totaldenominator = totaldenominator.drop('missing region')
+        totaldenominator = totaldenominator.drop('Outside UK')
+        totaldenominator.loc['All regions'] = totaldenominator.sum()
+        totaldenominator.loc['All UK'] = 1
+        
+        final['perc_of_all_jobs_in_region'] = final['total'] / totaldenominator['count'] * 100
 
     # must anonymise after calculating perc
     mask = final.loc[:, ['employed', 'self employed', 'total']] < 6000
     final[mask] = 0
+    
+    # set NA strings for excel output
+    if pd.isnull(sector):
+        final.loc['All UK', 'perc_of_all_jobs_in_region'] = -999999
+    
+    final.loc['All UK', 'perc_of_all_regions'] = -999999
+
 
     # final.loc['Wales', 'employed'] = 0
     # final.loc['North East', 'self employed'] = 0
@@ -83,7 +106,11 @@ def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region):
     final = final.fillna(0)
 
     # reorder columns
-    mycolorder = ['employed', 'employed_perc', 'self employed', 'self employed_perc', 'total']
+    if pd.isnull(sector):
+        mycolorder = ['employed', 'employed_perc', 'self employed', 'self employed_perc', 'total', 'perc_of_all_regions', 'perc_of_all_jobs_in_region']
+    else:
+        mycolorder = ['employed', 'employed_perc', 'self employed', 'self employed_perc', 'total', 'perc_of_all_regions']
+
     final = final.reindex(columns=mycolorder)
 
     return final
