@@ -8,7 +8,10 @@ import ipdb
 NOTES
 dcms..._2016_tables_2.xlsx is the workbook we are checking against and adds some fixes: 
     adds some missing anonymisations. below is a non exhaustive list
-        add 100 to all regions perc on region table to make consistent with other region tables.    
+        I previously added some missing anonymisation to some tables (sex I think?) but didn't make a note of it - think I emailed penny though
+        add 100 to all regions perc on region table to make consistent with other region tables.
+        add anonymisation to digital sector by region (north east)
+        add anonymisation to sport sector by region (east midlands)
     
     rounds qualification and ftpt (rounded .5 down in some cases) numbers to 0dp
 
@@ -26,195 +29,47 @@ want to keep all cat specific adjustments in this main script, not in functions
 """
 
 
+current_year = 2016
+
+allyears = {}
+for year in range(2012, current_year + 1):
+    allyears[year] = pd.read_csv("~/data/cleaned_" + str(year) + "_df.csv")
+    #print("~/data/cleaned_" + str(year) + "_df.csv")
 
 
-df = pd.read_csv("~/data/cleaned_2016_df.csv")
-
+# df2016 = pd.read_csv("~/data/cleaned_2016_df.csv")
+#df2016 = allyears[current_year]
 
 # finish cleaning data post R cleaning ========================================
-
-df['qualification'] = df['qualification'].astype(str)
-df['ftpt'] = df['ftpt'].astype(str)
-df['nssec'] = df['nssec'].astype(str)
 
 regionlookupdata = pd.read_csv('~/projects/employment/region-lookup.csv')
 regionlookdict = {}
 for index, row in regionlookupdata.iterrows():
     regionlookdict.update({row[0] : row[1]})
 
-df['regionmain'] = df.GORWKR.map(regionlookdict)
-df['regionsecond'] = df.GORWK2R.map(regionlookdict)
 
+def clean_raw_data(df):
+        
+    df['regionmain'] = df.GORWKR.map(regionlookdict)
+    df['regionsecond'] = df.GORWK2R.map(regionlookdict)
+    
+    return df
 
+allyears = {k: clean_raw_data(v) for k, v in allyears.items()}
+
+df = allyears[current_year]    
+df['qualification'] = df['qualification'].astype(str)
+df['ftpt'] = df['ftpt'].astype(str)
+df['nssec'] = df['nssec'].astype(str)
 
 sic_mappings = pd.read_csv("~/projects/employment/sic_mappings.csv")
 sic_mappings = sic_mappings[sic_mappings.sic != 62.011]
 sic_mappings.sic = round(sic_mappings.sic * 100, 0)
 sic_mappings.sic = sic_mappings.sic.astype(int)
 
+
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
-
-
-# BATCH TOGETHER DATA FUNCTIONS ===============================================
-
-def make_cat_data(cat):
-    
-    # CLEANING DATA - adding up main and second jobs, calculating some totals, columns for sector, cat, region, count
-    # there doesn't appear to be any tables which use both region and a demographic category, so simply remove region or replace cat column with it.
-    sic_level = False
-    
-    import clean_data_func
-    agg = clean_data_func.clean_data(cat, dfcopy, sic_mappings, regionlookupdata, region, sic_level)
-    
-    spsslist = """
-    1820, 2611, 2612, 2620, 2630, 2640, 2680, 3012, 3212, 3220, 3230, 4651, 4652, 4763, 4764, 4910, 4932, 4939, 5010, 5030, 5110, 5510, 5520, 5530, 5590, 5610, 5621, 5629, 5630, 5811, 5812, 5813, 5814, 
-    5819, 5821, 5829, 5911, 5912, 5913, 5914, 5920, 6010, 6020, 6110, 6120, 6130, 6190, 6201, 6202, 6203, 6209, 6311, 6312, 6391, 6399, 6820, 7021, 7111, 7311, 7312, 7410, 7420, 7430, 7711, 7721, 
-    7722, 7729, 7734, 7735, 7740, 7911, 7912, 7990, 8230, 8551, 8552, 9001, 9002, 9003, 9004, 9101, 9102, 9103, 9104, 9200, 9311, 9312, 9313, 9319, 9321, 9329, 9511, 9512 """
-    spsslist = spsslist.replace('\n', '')
-    spsslist = spsslist.replace('\t', '')
-    spsslist = spsslist.replace(' ', '')
-    mylist = np.array(spsslist.split(","))
-    
-    # in the final comparison for the region table, there is a discrepancy for west midlands self employed. to understand where this comes from, I will compare spss output for the region table with the equivalent from my program. this is the output from clean_data() for region, filtered to only include sector = 'total uk' (the totaluk part of the clean_data() data stack is completely unadulterated expect for filtering by emptype flag e.g. INECAC05 = 1) and then restricted to spss sics and aggregated by region and sic. however, with this comparison, there is no discrepancy for west midlands, only mainemp and secondsemp outside UK.
-    # aggcheck has too few outside UK for some reason. spssdf is as is (except for changing the grammer of some region labels), so obviously the definition of outisde UK for aggcheck is missing some cases. In order to view the records causing the discrepancy between each Outside UK numbers, we need to compare prior to aggregation, so I have output the first of the four subsets (mainemp) from spss and filtered to include only Outside UK and cases with a mainemp flag and inecac = employee - this gives 28 records with a total weighted count of 9259. next, aggregate this subset by sic to check it matches the standard output from spss.
-    
-    # so, I have mainemp from spss, which has no sic filtering, the sic filtering is applied in excel - what?? this isnt right. but the point is that my data does not match the spss output for outside uk, prior to sic filtering. REMEMBER running spss gives the wrong results on my mac - some problem with the unicode formatting - it errors with unicode off, and gives wrong result with unicode on.
-    def check_spss_out(agg, spss_xls, excelcatname):
-        aggcheck = agg.fillna(0)
-        # reduce down to desired aggregate
-        
-        # need to drop the sic/cat combinations that are duplicated for difference sectors
-        aggcheck = aggcheck[aggcheck['sector'] == 'total_uk']
-        aggcheck = aggcheck.drop('sector', axis=1)
-        aggcheck = aggcheck[aggcheck['sic'].isin(mylist)]
-        aggcheck = aggcheck.groupby(['sic', cat]).sum()
-        aggcheck = aggcheck.reset_index(['sic', cat])
-        #aggcheck = aggcheck[aggcheck['sic'] != -1]
-        if cat == 'region':
-            aggcheck = aggcheck[aggcheck[cat] != 'missing region']
-
-        
-        regionlookupdata2 = pd.read_csv('~/projects/employment/region-label-update.csv')
-        regionlookdict2 = {}
-        for index, row in regionlookupdata2.iterrows():
-            regionlookdict2.update({row[0] : row[1]})
-
-        # load workbook
-        spsswb = pd.ExcelFile(spss_xls + '.xls')
-        # print(spsswb.sheet_names)
-        spssdf = spsswb.parse(spss_xls)
-        
-        # change region label grammer to match aggcheck
-        if cat == 'region':
-            spssdf['Region'] = spssdf.Region.map(regionlookdict2)
-        # remove decimal from SIC
-        spssdf['sic'] = spssdf['SIC'].str[0:2] + spssdf['SIC'].str[3:5]
-        spssdf.sic = spssdf.sic.astype('float64')
-        # match column name and order to aggcheck
-        spssdf = spssdf[['sic', excelcatname, 'M_E_DCMS', 'S_E_DCMS', 'M_SE_DCMS', 'S_SE_DCMS']]
-        spssdf.columns = aggcheck.columns
-
-        wmcheck = spssdf[spssdf['sic'].isin(np.unique(sic_mappings.sic))]
-        wmcheck['semp'] = wmcheck['mainselfemp'] + wmcheck['secondselfemp']
-        
-        
-        aggcheck = aggcheck.set_index(['sic', cat])
-        spssdf = spssdf.set_index(['sic', cat])
-        #aggcheck.to_csv('~/projects/employment/aggcheck_forpenny.csv')
-        
-        
-        return {'aggcheck': aggcheck, 'spssdf': spssdf}
-    
-    if cat == 'region':
-        aggcheck = check_spss_out(agg, '2016_regions_4digit', 'Region')['aggcheck']
-        spssdf = check_spss_out(agg, '2016_regions_4digit', 'Region')['spssdf']
-    #both = check_spss_out(agg, '2016_sex_4digit', 'SEX')    
-    
-        
-    """    
-    spsswm = spssdf.xs('North East',level=1,axis=0)
-    acwm = aggcheck.xs('North East',level=1,axis=0)
-    wmdiff = spsswm - acwm
-    """
-    
-    """
-    def quicksummary(data):
-        spssdf2 = data.copy()
-        spssdf2['emp'] = spssdf2.mainemp + spssdf2.secondemp
-        spssdf2['semp'] = spssdf2.mainselfemp + spssdf2.secondselfemp
-        spssdf2 = spssdf2.drop(['mainemp', 'secondemp', 'mainselfemp', 'secondselfemp'], axis=1)
-        spssdf2 = spssdf2.groupby(['region']).sum()
-        return spssdf2
-    groupspssdf = quicksummary(spssdf)
-    groupaggcheck = quicksummary(aggcheck)
-    """
-
-    
-    import aggregate_data_func
-    aggfinal = aggregate_data_func.aggregate_data(cat, agg, sic_mappings, regionlookupdata, region, sic_level)
-    
-    #import clean_data_func_new
-    #aggfinal_new = clean_data_func_new.clean_data_new(cat, dfcopy, sic_mappings, regionlookupdata, region)
-    
-    #aggfinal = aggfinal[['sector', 'sex', 'emptype', 'count']].sort_values(by=['sector', 'sex', 'emptype']).set_index(['sector', 'sex', 'emptype'])
-    #aggfinal_new = aggfinal_new[['sector', 'sex', 'emptype', 'count']].sort_values(by=['sector', 'sex', 'emptype']).set_index(['sector', 'sex', 'emptype'])
-    #difference = aggfinal_new - aggfinal
-    
-    #import ipdb; ipdb.set_trace()
-    
-    #if mycat != 'region':
-    #    aggfinal = aggfinal.groupby(['sector', cat, 'emptype'])['count'].sum().reset_index()
-        #pdb.set_trace()
-        
-    if emptypecats == False:
-        aggfinal = aggfinal[aggfinal['emptype'] == 'total']
-                
-    
-    """
-    if (catvar == "dcms_ageband") aggfinal <- aggfinal[aggfinal$cat != "0-15 years", ]
-    if (catvar == "ethnicity") aggfinal <- aggfinal[aggfinal$emptype == "total" & aggfinal$cat != 0, ]
-    if (catvar == "qualification") aggfinal <- aggfinal[aggfinal$emptype == "total", ]
-    if (catvar == "ftpt") aggfinal <- aggfinal[aggfinal$emptype == "total", ]
-    """
-    
-    # SUMMARISING DATA
-    if cat == 'region':
-        import region_summary_table_func
-        final = region_summary_table_func.region_summary_table(aggfinal, cat, perc, cattotal, catorder, region, sector)
-    else:
-        import summary_table_func
-        final = summary_table_func.summary_table(aggfinal, cat, perc, cattotal, catorder, region) 
-    
-    #pdb.set_trace()
-    # ANONYMISING DATA
-    import anonymise_func
-    data = anonymise_func.anonymise(final, emptypecats, anoncats, cat)
-    
-    # add extra anonymisation to match publication
-    if cat == 'sex':
-        data.loc['telecoms', ('employed', 'Total')] = 0
-        data.loc['telecoms', ('self employed', 'Total')] = 0
-
-    if table == 'cs':
-        data.loc['Northern Ireland', 'total'] = 0
-        data.loc['Northern Ireland', 'perc_of_all_regions'] = 0
-    
-    # CHECK DATA MATCHES PUBLICATION
-    # store anonymised values as 0s for comparison and data types
-    import check_data_func
-    from openpyxl import load_workbook, Workbook
-    from openpyxl.utils.dataframe import dataframe_to_rows
-    exceldataframe = check_data_func.check_data(data, wsname, startrow, finishrow, finishcol)
-    # compare computed and publication data
-    
-    difference = data - exceldataframe
-    
-    if sum((difference > 1).any()) != 0:
-        print(cat + ': datasets dont match')
-    
-    #pdb.set_trace()
-    return [difference, data]
 
 
 # write data to excel template ================================================
@@ -235,11 +90,81 @@ if (catvar == "ftpt") df <- df[df[, catvar] %in% catorder, ]
 if (catvar == "nssec") df <- df[df[, catvar] %in% catorder, ]
 """
 
+
+# make time series tables =====================================================
+
+# iterate over each years data to make time series
+data = []
+for k, v in allyears.items():
+    #d2[k] = f(v)
+    # CLEANING DATA - adding up main and second jobs, calculating some totals, columns for sector, cat, region, count
+    # there doesn't appear to be any tables which use both region and a demographic category, so simply remove region or replace cat column with it.
+    sic_level = False
+    if k < 2016:
+        weightedcountcol = 'PWTA14'
+    if k == 2016:
+        weightedcountcol = 'PWTA16'
+    if k == 2017:
+        weightedcountcol = 'PWTA17'
+    
+    import clean_data_func
+    allyears[k] = clean_data_func.clean_data(v, {'mycat': 'region'}, sic_mappings, regionlookupdata, weightedcountcol)
+    
+    import aggregate_data_func
+    allyears[k] = aggregate_data_func.aggregate_data(allyears[k], {'mycat': 'region'})
+    
+    mycol = allyears[k][allyears[k]['emptype'] == 'total']
+    mycol = mycol.groupby(['sector']).sum()
+    mycol = mycol.rename(columns={'count': k})
+    data.append(mycol)
+
+timeseries = pd.concat(data, axis=1)
+
+if current_year < 2016:
+    weightedcountcol = 'PWTA14'
+if current_year == 2016:
+    weightedcountcol = 'PWTA16'
+if current_year == 2017:
+    weightedcountcol = 'PWTA17'
+
+
+# iterate through different cats to make cat tables for current year
 differencelist = {}
-for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nssec', 'region', 'cs']:
+for table in ['sex', 'time_series', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nssec', 'region', 'cs', 'ci', 'culture', 'digital', 'gambling', 'sport', 'telecoms']:
     
     anoncats = []
+    mycat = None
+    perc = None
+    cattotal = None
+    catorder = []
+    emptypecats = None
+    wsname = None
+    startrow = None
+    startcol = None
+    finishrow = None
+    finishcol = None
+    region = None
+    sector = np.nan
+    time_series = None
     
+    # set default param dict
+    table_params = {
+        'anoncats': [],
+        'mycat': None,
+        'perc': None,
+        'cattotal': None,
+        'catorder': [],
+        'emptypecats': None,
+        'wsname': None,
+        'startrow': None,
+        'startcol': None,
+        'finishrow': None,
+        'finishcol': None,
+        'region': None,
+        'sector': np.nan,
+        'time_series': None
+    }
+        
     # sex
     if table == 'sex':
         mycat = 'sex'
@@ -249,10 +174,22 @@ for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         emptypecats = True
         wsname = "3.5 - Gender (000's)"
         startrow = 9
+        startcol = 2
         finishrow = 17
         finishcol = 16
-        region = False
-    
+        table_params.update({
+            'mycat': 'sex',
+            'perc': True,
+            'cattotal': True,
+            'catorder': ['Male', 'Female'],
+            'emptypecats': True,
+            'wsname': "3.5 - Gender (000's)",
+            'startrow': 9,
+            'startcol': 2,
+            'finishrow': 17,
+            'finishcol': 16
+        })
+        
     # ethnicity
     if table == 'ethnicity':
         mycat = 'ethnicity'
@@ -262,9 +199,21 @@ for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         emptypecats = False
         wsname = "3.6 - Ethnicity (000's)"
         startrow = 8
+        startcol = 2
         finishrow = 16
         finishcol = 6
-        region = False
+        table_params.update({
+            'mycat': 'ethnicity',
+            'perc': True,
+            'cattotal': True,
+            'catorder': ['White', 'BAME'],
+            'emptypecats': False,
+            'wsname': "3.6 - Ethnicity (000's)",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 16,
+            'finishcol': 6
+        })
         
         # ethnicity
     if table == 'dcms_ageband':
@@ -275,9 +224,21 @@ for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         emptypecats = True
         wsname = "3.7 - Age (000's)"
         startrow = 8
+        startcol = 2
         finishrow = 16
         finishcol = 16
-        region = False
+        table_params.update({
+            'mycat': 'dcms_ageband',
+            'perc': False,
+            'cattotal': True,
+            'catorder': ['16-24 years', '25-39 years', '40-59 years', '60 years +'],
+            'emptypecats': True,
+            'wsname': "3.7 - Age (000's)",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 16,
+            'finishcol': 16
+        })
         
     if table == 'qualification':
         mycat = 'qualification'
@@ -287,10 +248,23 @@ for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         emptypecats = False
         wsname = "3.8 - Qualification (000's)"
         startrow = 7
+        startcol = 2
         finishrow = 15
         finishcol = 8
         anoncats = ['Other', 'No Qualification']
-        region = False
+        table_params.update({
+            'mycat': 'qualification',
+            'perc': False,
+            'cattotal': True,
+            'catorder': ["Degree or equivalent",	"Higher Education",	"A Level or equivalent", "GCSE A* - C or equivalent",	"Other",	"No Qualification"],
+            'emptypecats': False,
+            'wsname': "3.8 - Qualification (000's)",
+            'startrow': 7,
+            'startcol': 2,
+            'finishrow': 15,
+            'finishcol': 8,
+            'anoncats': ['Other', 'No Qualification']
+        })
                 
     if table == 'ftpt':
         mycat = 'ftpt'
@@ -300,10 +274,22 @@ for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         emptypecats = False
         wsname = "3.9 - Fulltime Parttime (000's)"
         startrow = 8
+        startcol = 2
         finishrow = 16
         finishcol = 6
-        region = False
-        
+        table_params.update({
+            'mycat': 'ftpt',
+            'perc': True,
+            'cattotal': True,
+            'catorder': ['Full time', 'Part time'],
+            'emptypecats': False,
+            'wsname': "3.9 - Fulltime Parttime (000's)",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 16,
+            'finishcol': 6
+        })
+
     if table == 'nssec':
         mycat = 'nssec'
         perc = False
@@ -312,10 +298,22 @@ for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         emptypecats = True
         wsname = "3.10 - NS-SEC (000's)"
         startrow = 8
+        startcol = 2
         finishrow = 16
         finishcol = 7
-        region = False
-        
+        table_params.update({
+            'mycat': 'nssec',
+            'perc': False,
+            'cattotal': False,
+            'catorder': ["More Advantaged Group (NS-SEC 1-4)", "Less Advantaged Group (NS-SEC 5-8)"],
+            'emptypecats': True,
+            'wsname': "3.10 - NS-SEC (000's)",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 16,
+            'finishcol': 6
+        })
+                
     if table == 'region':
         mycat = 'region'
         perc = True
@@ -323,11 +321,21 @@ for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         emptypecats = True
         wsname = "3.3 - Region (000's)"
         startrow = 8
+        startcol = 2
         finishrow = 21
         finishcol = 8
-        region = True
-        sector = np.nan
-
+        table_params.update({
+            'mycat': 'region',
+            'perc': True,
+            'cattotal': False,
+            'emptypecats': True,
+            'wsname': "3.3 - Region (000's)",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 21,
+            'finishcol': 8
+        })
+        
     if table == 'cs':
         mycat = 'region'
         perc = True
@@ -335,24 +343,293 @@ for table in ['sex', 'ethnicity', 'dcms_ageband', 'qualification', 'ftpt', 'nsse
         emptypecats = True
         wsname = "3.3a - Civil Society"
         startrow = 8
+        startcol = 2
+        finishrow = 21
+        finishcol = 7
+        #region = True
+        sector = 'civil_society'
+        table_params.update({
+            'mycat': 'region',
+            'perc': True,
+            'cattotal': False,
+            'emptypecats': True,
+            'wsname': "3.3a - Civil Society",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 21,
+            'finishcol': 8,
+            'sector': 'civil_society'
+        })
+        
+    if table == 'ci':
+        mycat = 'region'
+        perc = True
+        cattotal = False
+        emptypecats = True
+        wsname = "3.3b - Creative Industries"
+        startrow = 8
+        startcol = 2
         finishrow = 21
         finishcol = 7
         region = True
-        sector = 'civil_society'
-
-    
-    
-        #import ipdb; ipdb.set_trace()
+        sector = 'creative'
+        table_params.update({
+            'mycat': 'region',
+            'perc': True,
+            'cattotal': False,
+            'emptypecats': True,
+            'wsname': "3.3a - Civil Society",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 21,
+            'finishcol': 8,
+            'sector': 'creative'
+        })
         
+    if table == 'culture':
+        mycat = 'region'
+        perc = True
+        cattotal = False
+        emptypecats = True
+        wsname = "3.3c - Cultural Sector"
+        startrow = 8
+        startcol = 2
+        finishrow = 21
+        finishcol = 7
+        region = True
+        sector = 'culture'
+        table_params.update({
+            'mycat': 'region',
+            'perc': True,
+            'cattotal': False,
+            'emptypecats': True,
+            'wsname': "3.3c - Cultural Sector",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 21,
+            'finishcol': 7,
+            'sector': 'culture'
+        })
+        
+    if table == 'digital':
+        mycat = 'region'
+        perc = True
+        cattotal = False
+        emptypecats = True
+        wsname = "3.3d - Digital Sector"
+        startrow = 8
+        startcol = 2
+        finishrow = 21
+        finishcol = 7
+        region = True
+        sector = 'digital'
+        table_params.update({
+            'mycat': 'region',
+            'perc': True,
+            'cattotal': False,
+            'emptypecats': True,
+            'wsname': "3.3d - Digital Sector",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 21,
+            'finishcol': 7,
+            'sector': 'digital'
+        })
+        
+    if table == 'gambling':
+        mycat = 'region'
+        perc = True
+        cattotal = False
+        emptypecats = True
+        wsname = "3.3e - Gambling"
+        startrow = 7
+        startcol = 2
+        finishrow = 20
+        finishcol = 3
+        region = True
+        sector = 'gambling'
+        table_params.update({
+            'mycat': 'region',
+            'perc': True,
+            'cattotal': False,
+            'emptypecats': True,
+            'wsname': "3.3e - Gambling",
+            'startrow': 7,
+            'startcol': 2,
+            'finishrow': 20,
+            'finishcol': 3,
+            'sector': 'gambling'
+        })
+        
+    if table == 'sport':
+        mycat = 'region'
+        perc = True
+        cattotal = False
+        emptypecats = True
+        wsname = "3.3f - Sport"
+        startrow = 8
+        startcol = 2
+        finishrow = 21
+        finishcol = 7
+        region = True
+        sector = 'sport'
+        table_params.update({
+            'mycat': 'region',
+            'perc': True,
+            'cattotal': False,
+            'emptypecats': True,
+            'wsname': "3.3f - Sport",
+            'startrow': 8,
+            'startcol': 2,
+            'finishrow': 21,
+            'finishcol': 7,
+            'sector': 'sport'
+        })
+
+    if table == 'telecoms':
+        mycat = 'region'
+        perc = True
+        cattotal = False
+        emptypecats = True
+        wsname = "3.3g - Telecoms"
+        startrow = 7
+        startcol = 2
+        finishrow = 20
+        finishcol = 3
+        region = True
+        sector = 'telecoms'
+        table_params.update({
+            'mycat': 'region',
+            'perc': True,
+            'cattotal': False,
+            'emptypecats': True,
+            'wsname': "3.3g - Telecoms",
+            'startrow': 7,
+            'startcol': 2,
+            'finishrow': 20,
+            'finishcol': 3,
+            'sector': 'telecoms'
+        })
+    
+    if table == 'time_series':
+        time_series = True
+        startrow = 7
+        startcol = 3
+        finishrow = 17
+        finishcol = 7
+        wsname = "3.1 - Employment (000's)"
+        table_params.update({
+            'time_series': True,
+            'startrow': 7,
+            'startcol': 3,
+            'finishrow': 17,
+            'finishcol': 7,
+            'wsname': "3.1 - Employment (000's)"
+        })
+
     dfcopy = df.copy()
     if mycat == 'qualification':
         dfcopy = dfcopy[dfcopy.qualification != 'dont know']
         dfcopy = dfcopy[dfcopy.qualification != 'nan']
     
+    if time_series:
+        data = timeseries
+
+        tourism = pd.DataFrame(columns=data.columns)
+        tourism.loc['tourism'] = [2, 3, 4, 5, 6]
+
+        percuk = pd.DataFrame(columns=data.columns)
+        percuk.loc['percuk'] = [2, 3, 4, 5, 6]
+        
+        # add tourism
+        data = data.append(tourism)
+        data = data.append(percuk)
+        
+        # rounding
+        data = round(data / 1000, 0).astype(int)
+        
+        
+        # reorder rows
+        myroworder = ["civil_society", "creative", "culture", "digital", "gambling", "sport", "telecoms", 'tourism', "all_dcms", 'percuk', "total_uk"]
+        data = data.reindex(myroworder)
+        
+        
+        # CHECK DATA MATCHES PUBLICATION
+        # store anonymised values as 0s for comparison and data types
+        import check_data_func
+        from openpyxl import load_workbook, Workbook
+        from openpyxl.utils.dataframe import dataframe_to_rows
+        exceldataframe = check_data_func.check_data(data, wsname, startrow, startcol, finishrow, finishcol)
+        # compare computed and publication data
+        
+        difference = data - exceldataframe
+        
+        if sum((difference > 1).any()) != 0:
+            print(table + ': datasets dont match')
+            
+    # MAIN GROUP OF FUNCTIONS
+    else:        
+        cat = mycat
+        # CLEANING DATA - adding up main and second jobs, calculating some totals, columns for sector, cat, region, count
+        # there doesn't appear to be any tables which use both region and a demographic category, so simply remove region or replace cat column with it.
+        sic_level = False
+        
+        import clean_data_func
+        agg = clean_data_func.clean_data(dfcopy, table_params, sic_mappings, regionlookupdata, weightedcountcol)
+        
+        spsslist = """
+        1820, 2611, 2612, 2620, 2630, 2640, 2680, 3012, 3212, 3220, 3230, 4651, 4652, 4763, 4764, 4910, 4932, 4939, 5010, 5030, 5110, 5510, 5520, 5530, 5590, 5610, 5621, 5629, 5630, 5811, 5812, 5813, 5814, 
+        5819, 5821, 5829, 5911, 5912, 5913, 5914, 5920, 6010, 6020, 6110, 6120, 6130, 6190, 6201, 6202, 6203, 6209, 6311, 6312, 6391, 6399, 6820, 7021, 7111, 7311, 7312, 7410, 7420, 7430, 7711, 7721, 
+        7722, 7729, 7734, 7735, 7740, 7911, 7912, 7990, 8230, 8551, 8552, 9001, 9002, 9003, 9004, 9101, 9102, 9103, 9104, 9200, 9311, 9312, 9313, 9319, 9321, 9329, 9511, 9512 """
+        spsslist = spsslist.replace('\n', '')
+        spsslist = spsslist.replace('\t', '')
+        spsslist = spsslist.replace(' ', '')
+        mylist = np.array(spsslist.split(","))
+        
+        import aggregate_data_func
+        aggfinal = aggregate_data_func.aggregate_data(agg, table_params)
+            
+        if emptypecats == False:
+            aggfinal = aggfinal[aggfinal['emptype'] == 'total']
+                            
+        # SUMMARISING DATA
+        if cat == 'region':
+            import region_summary_table_func
+            final = region_summary_table_func.region_summary_table(aggfinal, table_params)
+        else:
+            import summary_table_func
+            final = summary_table_func.summary_table(aggfinal, cat, perc, cattotal, catorder) 
+        
+        # ANONYMISING DATA
+        import anonymise_func
+        data = anonymise_func.anonymise(final, emptypecats, anoncats, cat, sector)
+        
+        # add extra anonymisation to match publication
+        if cat == 'sex':
+            data.loc['telecoms', ('employed', 'Total')] = 0
+            data.loc['telecoms', ('self employed', 'Total')] = 0
     
-    mylist = make_cat_data(mycat)
-    data = mylist[1]
-    difference = mylist[0]    
+        if table == 'cs':
+            data.loc['Northern Ireland', 'total'] = 0
+            data.loc['Northern Ireland', 'perc_of_all_regions'] = 0
+        
+        # CHECK DATA MATCHES PUBLICATION
+        # store anonymised values as 0s for comparison and data types
+        import check_data_func
+        from openpyxl import load_workbook, Workbook
+        from openpyxl.utils.dataframe import dataframe_to_rows
+        exceldataframe = check_data_func.check_data(data, wsname, startrow, startcol, finishrow, finishcol)
+        # compare computed and publication data
+        
+        difference = data - exceldataframe
+        
+        if sum((difference > 1).any()) != 0:
+            print(cat + ': datasets dont match')
+        
+        #mylist = make_cat_data()
+        #data = mylist[1]
+        #difference = mylist[0]
+
     differencelist.update({table : difference})
     
     ws = wb[wsname]
@@ -379,8 +656,14 @@ import pytest
     pytest.param('qualification', 0, marks=pytest.mark.xfail), # publication numbers dont add up - go through with penny - turn's out there is an extra column which is hidden by the publication called don't know which explains all this
     pytest.param('ftpt', 0, marks=pytest.mark.basic),
     pytest.param('nssec', 0, marks=pytest.mark.basic),
-    pytest.param('region', 0, marks=pytest.mark.xfail),
+    pytest.param('region', 0, marks=pytest.mark.basic),
     pytest.param('cs', 0, marks=pytest.mark.basic),
+    pytest.param('ci', 0, marks=pytest.mark.basic),
+    pytest.param('culture', 0, marks=pytest.mark.basic),
+    pytest.param('digital', 0, marks=pytest.mark.basic),
+    pytest.param('gambling', 0, marks=pytest.mark.basic),
+    pytest.param('sport', 0, marks=pytest.mark.basic),
+    pytest.param('telecoms', 0, marks=pytest.mark.basic),
 ])
 def test_datamatches(test_input, expected):
     assert sum((differencelist[test_input] < -0.05).any()) == expected

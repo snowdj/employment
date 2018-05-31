@@ -7,7 +7,7 @@ import pdb
 #aggfinal['count'] = round(aggfinal['count'] / 1000, 0).astype(int)
 
 # summary table
-def summary_table(aggfinal, cat, perc, cattotal, catorder, region):
+def summary_table(aggfinal, cat, perc, cattotal, catorder):
     
     for emptype in aggfinal['emptype'].unique():
         

@@ -7,12 +7,12 @@ import pdb
 #aggfinal['count'] = round(aggfinal['count'] / 1000, 0).astype(int)
 
 # summary table
-def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region, sector):
+def region_summary_table(aggfinal, table_params):
     
-    if pd.isnull(sector):
+    if pd.isnull(table_params['sector']):
         breakdown = 'all_dcms'
     else:
-        breakdown = sector
+        breakdown = table_params['sector']
     # create two way table for regions
     for emptype in ['employed', 'self employed', 'total']:
         
@@ -64,14 +64,13 @@ def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region, sector
 
     for emptype in ['employed', 'self employed']:
         # add perc columns
-        if perc:
+        if table_params['perc']:
             final.loc[:, (emptype + '_perc')] = final[emptype] / final['total'] * 100
     
-    final['perc_of_all_regions'] = final['total'] / final.loc['All regions', 'total'] * 100
-    
-    if pd.isnull(sector):
+    # add perc of all jobs in region column - main region table only
+    if pd.isnull(table_params['sector']):
         totaldenominator = aggfinal.set_index(['sector', 'region', 'emptype'])
-        totaldenominator = totaldenominator.loc[('total_uk', slice(None), 'total')]
+        totaldenominator = totaldenominator.xs(('total_uk', 'total'), level=('sector', 'emptype'), axis=0)
         totaldenominator = totaldenominator.drop('missing region')
         totaldenominator = totaldenominator.drop('Outside UK')
         totaldenominator.loc['All regions'] = totaldenominator.sum()
@@ -82,9 +81,11 @@ def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region, sector
     # must anonymise after calculating perc
     mask = final.loc[:, ['employed', 'self employed', 'total']] < 6000
     final[mask] = 0
+
+    final['perc_of_all_regions'] = final['total'] / final.loc['All regions', 'total'] * 100
     
     # set NA strings for excel output
-    if pd.isnull(sector):
+    if pd.isnull(table_params['sector']):
         final.loc['All UK', 'perc_of_all_jobs_in_region'] = -999999
     
     final.loc['All UK', 'perc_of_all_regions'] = -999999
@@ -106,10 +107,13 @@ def region_summary_table(aggfinal, cat, perc, cattotal, catorder, region, sector
     final = final.fillna(0)
 
     # reorder columns
-    if pd.isnull(sector):
+    if pd.isnull(table_params['sector']):
         mycolorder = ['employed', 'employed_perc', 'self employed', 'self employed_perc', 'total', 'perc_of_all_regions', 'perc_of_all_jobs_in_region']
     else:
         mycolorder = ['employed', 'employed_perc', 'self employed', 'self employed_perc', 'total', 'perc_of_all_regions']
+    
+    if breakdown == 'gambling' or breakdown == 'telecoms':
+        mycolorder = ['total', 'perc_of_all_regions']
 
     final = final.reindex(columns=mycolorder)
 

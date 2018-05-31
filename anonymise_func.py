@@ -2,17 +2,18 @@ import pandas as pd
 import numpy as np
 import itertools
 
-def anonymise(data, emptypecats, anoncats, cat):
+def anonymise(data, emptypecats, anoncats, cat, sector):
     # anonymisation
-
+    
     if cat == 'region':
-        for row in data.index:
-            for emptype in ['employed', 'self employed']:
-                if data[emptype][row] == 0:
-                    otheremptype = ['employed', 'self employed']
-                    otheremptype.remove(emptype)
-                    data.loc[row, otheremptype[0]] = 0
-                    data.loc[row, otheremptype[0] + '_perc'] = 0
+        if sector != 'gambling' and sector != 'telecoms':
+            for row in data.index:
+                for emptype in ['employed', 'self employed']:
+                    if data[emptype][row] == 0:
+                        otheremptype = ['employed', 'self employed']
+                        otheremptype.remove(emptype)
+                        data.loc[row, otheremptype[0]] = 0
+                        data.loc[row, otheremptype[0] + '_perc'] = 0
     
     else:
         cat1 = data.columns.levels[0].values.tolist()

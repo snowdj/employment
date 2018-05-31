@@ -21,38 +21,24 @@ def expand_grid(data_dict):
    rows = itertools.product(*data_dict.values())
    return pd.DataFrame.from_records(rows, columns=data_dict.keys())
 
-def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
+def clean_data(df, table_params, sic_mappings, regionlookupdata, weightedcountcol):
     #region = False
     
-    if sic_level == True:
-        level = 'sic'
+    if table_params['mycat'] == 'region':
+        catuniques = np.unique(regionlookupdata.mapno)
     else:
-        level = 'sector'
+        catuniques = np.unique(df[table_params['mycat']])
     
     x = pd.Series(np.unique(sic_mappings.sector))
     y = pd.Series(["civil_society", "total_uk", "overlap"])
     x = x.append(y)
     
-    if region == True:
-        agg = expand_grid(
-           {'sector': x,
-           'region': np.unique(regionlookupdata.mapno)
-           }
-        )
-    else:
-        if sic_level == True:
-            agg = expand_grid(
-               {'sic': np.unique(sic_mappings.sic),
-               cat: np.unique(df[cat])
-               }
-            )
-        else:
-            agg = expand_grid(
-               {'sector': x,
-                #'sic': np.unique(sic_mappings.sic),
-               cat: np.unique(df[cat])
-               }
-            )
+    agg = expand_grid(
+       {'sector': x,
+        #'sic': np.unique(sic_mappings.sic),
+       table_params['mycat']: catuniques
+       }
+    )
 
     for subset in ['mainemp', 'secondemp', 'mainselfemp', 'secondselfemp']:
         if subset == 'mainemp':
@@ -84,8 +70,8 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
         dftemp = dftemp[dftemp[emptype] == emptypeflag]
         # need separate sic column to allow merging - I think
         dftemp['sic'] = dftemp[sicvar]
-        dftemp['count'] = dftemp['PWTA16']
-        
+        dftemp['count'] = dftemp[weightedcountcol]
+
         # total uk includes missing sics, so take copy before removing missing sics
         dftemp_totaluk = dftemp.copy()
         
@@ -133,7 +119,7 @@ def clean_data(cat, df, sic_mappings, regionlookupdata, region, sic_level):
         dftemp['sic'] = dftemp['sic'].fillna(value=-1)
         
         # create column with unique name (which is why pd.DataFrame() syntax is used) which sums the count by sector
-        aggtemp = pd.DataFrame({subset : dftemp.groupby( ['sector', cat, 'sic'])['count'].sum()}).reset_index()
+        aggtemp = pd.DataFrame({subset : dftemp.groupby( ['sector', table_params['mycat'], 'sic'])['count'].sum()}).reset_index()
         
         #if sic_level == False:
         #    aggtemp = pd.DataFrame({subset : aggtemp.groupby( ['sector', cat])[subset].sum()}).reset_index()

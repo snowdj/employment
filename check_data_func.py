@@ -5,7 +5,7 @@ import itertools
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows    
 
-def check_data(data, wsname, startrow, finishrow, finishcol):
+def check_data(data, wsname, startrow, startcol, finishrow, finishcol):
     # check data against publication
     
     # read in publication data    
@@ -18,7 +18,7 @@ def check_data(data, wsname, startrow, finishrow, finishcol):
     
     # copy data into list
     for row in range(startrow - 1, finishrow):
-        listrow = list(exceldata[row][1:finishcol])
+        listrow = list(exceldata[row][(startcol-1):finishcol])
         
         # code anonymised as 0s
         listrow = [0 if x == '-' else x for x in listrow]
