@@ -534,13 +534,21 @@ for table in ['sex', 'time_series', 'ethnicity', 'dcms_ageband', 'qualification'
     
     if time_series:
         data = timeseries
-
-        tourism = pd.DataFrame(columns=data.columns)
-        tourism.loc['tourism'] = [2, 3, 4, 5, 6]
-
-        percuk = pd.DataFrame(columns=data.columns)
-        percuk.loc['percuk'] = [2, 3, 4, 5, 6]
         
+        if current_year == 2016:
+            tourism = pd.DataFrame(columns=data.columns)
+            tourism.loc['tourism'] = [2, 3, 4, 5, 6]
+    
+            percuk = pd.DataFrame(columns=data.columns)
+            percuk.loc['percuk'] = [2, 3, 4, 5, 6]
+        
+        if current_year == 2017:
+            tourism = pd.DataFrame(columns=data.columns)
+            tourism.loc['tourism'] = [2, 3, 4, 5, 6, 7]
+    
+            percuk = pd.DataFrame(columns=data.columns)
+            percuk.loc['percuk'] = [2, 3, 4, 5, 6, 7]
+
         # add tourism
         data = data.append(tourism)
         data = data.append(percuk)
@@ -559,13 +567,13 @@ for table in ['sex', 'time_series', 'ethnicity', 'dcms_ageband', 'qualification'
         import check_data_func
         from openpyxl import load_workbook, Workbook
         from openpyxl.utils.dataframe import dataframe_to_rows
-        exceldataframe = check_data_func.check_data(data, wsname, startrow, startcol, finishrow, finishcol)
-        # compare computed and publication data
-        
-        difference = data - exceldataframe
-        
-        if sum((difference > 1).any()) != 0:
-            print(table + ': datasets dont match')
+#        exceldataframe = check_data_func.check_data(data, wsname, startrow, startcol, finishrow, finishcol)
+#        # compare computed and publication data
+#        
+#        difference = data - exceldataframe
+#        
+#        if sum((difference > 1).any()) != 0:
+#            print(table + ': datasets dont match')
             
     # MAIN GROUP OF FUNCTIONS
     else:        
@@ -576,6 +584,7 @@ for table in ['sex', 'time_series', 'ethnicity', 'dcms_ageband', 'qualification'
         
         import clean_data_func
         agg = clean_data_func.clean_data(dfcopy, table_params, sic_mappings, regionlookupdata, weightedcountcol)
+        agg = agg[['sector', mycat, 'sic', 'mainemp', 'secondemp', 'mainselfemp', 'secondselfemp']]
         
         spsslist = """
         1820, 2611, 2612, 2620, 2630, 2640, 2680, 3012, 3212, 3220, 3230, 4651, 4652, 4763, 4764, 4910, 4932, 4939, 5010, 5030, 5110, 5510, 5520, 5530, 5590, 5610, 5621, 5629, 5630, 5811, 5812, 5813, 5814, 
@@ -670,7 +679,7 @@ def test_datamatches(test_input, expected):
     assert sum((differencelist[test_input] > 0.05).any()) == expected
 
 
-wb.save('dcms-testing2.xlsx')
+wb.save('employment_pub_2017_python_unfinished.xlsx')
 
 # get final table with hierarchical indexes which I can check against those read in from excel (including order of rows etc), but then just output the values to the formatted excel templates
 

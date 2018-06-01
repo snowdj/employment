@@ -21,6 +21,7 @@ def expand_grid(data_dict):
    rows = itertools.product(*data_dict.values())
    return pd.DataFrame.from_records(rows, columns=data_dict.keys())
 
+#@profile
 def clean_data(df, table_params, sic_mappings, regionlookupdata, weightedcountcol):
     #region = False
     
@@ -66,11 +67,12 @@ def clean_data(df, table_params, sic_mappings, regionlookupdata, weightedcountco
             regioncol = 'regionsecond'
         
         # create subset for each of 4 groups
-        dftemp = df.copy()
+        df['region'] = df[regioncol]
+        df['region'] = df['region'].fillna('missing region')
+        dftemp = df[[sicvar, emptype, weightedcountcol, 'cs_flag', table_params['mycat']]].copy()
         dftemp = dftemp[dftemp[emptype] == emptypeflag]
         # need separate sic column to allow merging - I think
-        dftemp['sic'] = dftemp[sicvar]
-        dftemp['count'] = dftemp[weightedcountcol]
+        dftemp.rename(columns={sicvar : 'sic'}, inplace=True)
 
         # total uk includes missing sics, so take copy before removing missing sics
         dftemp_totaluk = dftemp.copy()
@@ -84,7 +86,7 @@ def clean_data(df, table_params, sic_mappings, regionlookupdata, weightedcountco
         
         # subset civil society
         dftemp_cs = dftemp[dftemp['cs_flag'] == 1]
-        dftemp_cs.loc[:, 'sector'] = 'civil_society'
+        dftemp_cs['sector'] = 'civil_society'
         dftemp_cs = dftemp_cs[dftemp_sectors.columns.values]
         
         # subset all_dcms (still need to add cs and remove overlap)
@@ -107,10 +109,8 @@ def clean_data(df, table_params, sic_mappings, regionlookupdata, weightedcountco
         dftemp = dftemp.append(dftemp_cs)
         dftemp = dftemp.append(dftemp_all_dcms)
         dftemp = dftemp.append(dftemp_all_dcms_overlap)
-        dftemp['region'] = dftemp[regioncol]
         
         # groupby ignores NaN so giving region NaNs a value
-        dftemp['region'] = dftemp['region'].fillna('missing region')
         
         # this converts sic back to numeric
         dftemp = dftemp.infer_objects()
@@ -119,7 +119,7 @@ def clean_data(df, table_params, sic_mappings, regionlookupdata, weightedcountco
         dftemp['sic'] = dftemp['sic'].fillna(value=-1)
         
         # create column with unique name (which is why pd.DataFrame() syntax is used) which sums the count by sector
-        aggtemp = pd.DataFrame({subset : dftemp.groupby( ['sector', table_params['mycat'], 'sic'])['count'].sum()}).reset_index()
+        aggtemp = pd.DataFrame({subset : dftemp.groupby( ['sector', table_params['mycat'], 'sic'])[weightedcountcol].sum()}).reset_index()
         
         #if sic_level == False:
         #    aggtemp = pd.DataFrame({subset : aggtemp.groupby( ['sector', cat])[subset].sum()}).reset_index()
@@ -134,5 +134,5 @@ def clean_data(df, table_params, sic_mappings, regionlookupdata, weightedcountco
         # merge final stacked subset into empty dataset containing each sector and category level combo
         # should be able to just use aggtemp for first agg where subset=='mainemp', but gave error, need to have play around. checking that agg has all the correct sectors and cat levels should be a separate piece of code.
         agg = pd.merge(agg, aggtemp, how='outer')
-    
+        
     return agg
