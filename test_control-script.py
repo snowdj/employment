@@ -32,7 +32,7 @@ want to keep all cat specific adjustments in this main script, not in functions
 current_year = 2016
 
 allyears = {}
-for year in range(2012, current_year + 1):
+for year in range(2011, current_year + 1):
     allyears[year] = pd.read_csv("~/data/cleaned_" + str(year) + "_df.csv")
     #print("~/data/cleaned_" + str(year) + "_df.csv")
 
@@ -537,17 +537,17 @@ for table in ['sex', 'time_series', 'ethnicity', 'dcms_ageband', 'qualification'
         
         if current_year == 2016:
             tourism = pd.DataFrame(columns=data.columns)
-            tourism.loc['tourism'] = [2, 3, 4, 5, 6]
+            tourism.loc['tourism'] = [1, 2, 3, 4, 5, 6]
     
             percuk = pd.DataFrame(columns=data.columns)
-            percuk.loc['percuk'] = [2, 3, 4, 5, 6]
+            percuk.loc['percuk'] = [1, 2, 3, 4, 5, 6]
         
         if current_year == 2017:
             tourism = pd.DataFrame(columns=data.columns)
-            tourism.loc['tourism'] = [2, 3, 4, 5, 6, 7]
+            tourism.loc['tourism'] = [1, 2, 3, 4, 5, 6, 7]
     
             percuk = pd.DataFrame(columns=data.columns)
-            percuk.loc['percuk'] = [2, 3, 4, 5, 6, 7]
+            percuk.loc['percuk'] = [1, 2, 3, 4, 5, 6, 7]
 
         # add tourism
         data = data.append(tourism)
